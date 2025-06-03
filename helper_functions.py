@@ -203,3 +203,32 @@ def preprocess_rgb_mask_with_csv(
     return tf.cast(id_mask, tf.uint8)
 
 ##--------------------------------------------------------------------------------------------------------------------
+
+#fucntion for preprocessing image and mask it take datset of image_path and mask_path (tf.data.Dataset.from_tensor_slices((list_of_image_paths, list_of_mask_paths))) 
+# and you can you ues it by maping the dataset
+## !! you will need to cheange the csv_path and the col name if need it
+def load_and_preprocess_image_mask(image_path, mask_path):
+    # ----- IMAGE SIDE -----
+    #  a) Read file bytes, decode to uint8 tensor, resize & normalize
+    raw = tf.io.read_file(image_path)
+    img = tf.io.decode_png(raw, channels=3)      # (H, W, 3), uint8
+    img = tf.image.resize(img, [256, 256])       # choose your IMG_SIZE
+    img = tf.cast(img, tf.float32) / 255.0       # now in [0,1]
+
+    # ----- MASK SIDE -----
+    #  b) Convert from color‐coded PNG → single‐channel ID mask
+    id_mask = preprocess_rgb_mask_with_csv(
+        mask_path=mask_path,
+        csv_path="/path/to/your/colormap.csv",
+        r_col="# r",  # exactly match your CSV header
+        g_col="# g",
+        b_col="# b",
+        id_col=None,                  # if your CSV has no explicit “ID” column
+        ignore_color=(224, 224, 192),
+        ignore_id=255
+    )
+    #  c) Resize the ID mask using nearest‐neighbor (so IDs don’t get interpolated)
+    id_mask = tf.image.resize(id_mask[..., None], [256, 256], method="nearest")
+    id_mask = tf.squeeze(id_mask, axis=-1)  # shape = (256, 256), dtype=uint8
+
+    return img, id_mask
