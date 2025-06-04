@@ -1,3 +1,6 @@
+import os
+import glob
+
 def make_dataset(path_to_image_folder = str,
                  path_to_mask_folder = str,
                  labe_string = "_L"
