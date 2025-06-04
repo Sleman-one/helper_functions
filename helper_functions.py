@@ -1,3 +1,119 @@
+def make_dataset(path_to_image_folder = str,
+                 path_to_mask_folder = str,
+                 labe_string = "_L"
+                 ):
+    list_of_image_paths = sorted(glob.glob(os.path.join(path_to_image_folder , "*.png")))
+
+    list_of_mask_paths = []
+    for img_path in list_of_image_paths:
+
+      _, filename = os.path.split(img_path)
+      name , ext = os.path.splitext(filename)
+      mask_name = name +labe_string + ext
+      mask_path = os.path.join(path_to_mask_folder, mask_name)
+
+      if os.path.exists(mask_path):
+        list_of_mask_paths.append(mask_path)
+      else:
+        print(f"Warning: missing mask for {img_path}")
+
+    image_paths_tf = tf.constant(list_of_image_paths, dtype=tf.string)
+    mask_paths_tf  = tf.constant(list_of_mask_paths,  dtype=tf.string)
+    dataset = tf.data.Dataset.from_tensor_slices((image_paths_tf, mask_paths_tf))
+
+    return dataset
+
+
+##--------------------------------------------------------------------------------------------------------------------
+
+import math
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+def plot_images_masks(images, masks, pred_masks=None):
+    """
+    Plots a batch of (image, mask[, pred_mask]) triplets, laying them out
+    in groups of 4 per row. If pred_masks is provided, each image row is:
+    
+      ┌──────────┬──────────┬──────────┬──────────┐
+      │ Image 1  │ Image 2  │ Image 3  │ Image 4  │  <-- images
+      ├──────────┼──────────┼──────────┼──────────┤
+      │ Mask 1   │ Mask 2   │ Mask 3   │ Mask 4   │  <-- ground-truth masks
+      ├──────────┼──────────┼──────────┼──────────┤
+      │ Pred 1   │ Pred 2   │ Pred 3   │ Pred 4   │  <-- predicted masks
+      └──────────┴──────────┴──────────┴──────────┘
+
+    If pred_masks is None, only two rows per block (images + masks) are drawn.
+    If your batch size is not a multiple of 4, the last row will have fewer than 4 entries.
+
+    Args:
+      images:     A Tensor of shape (B, H, W, 3) or a NumPy array, with pixel values in [0..255] or [0..1].
+      masks:      A Tensor of shape (B, H, W) or (B, H, W, 1), integer class IDs.
+      pred_masks: (Optional) A Tensor of shape (B, H, W) or (B, H, W, 1), your model’s predicted masks.
+
+    Example:
+      plot_images_masks(img_batch, mask_batch)
+      plot_images_masks(img_batch, mask_batch, pred_mask_batch)
+    """
+    # Ensure eager numpy conversion is available
+    images_np    = images.numpy()    if tf.is_tensor(images)    else images
+    masks_np     = masks.numpy()     if tf.is_tensor(masks)     else masks
+    has_preds    = (pred_masks is not None)
+    pred_np      = pred_masks.numpy() if has_preds and tf.is_tensor(pred_masks) else pred_masks
+    
+    B = images_np.shape[0]                  # total number of examples in this batch
+    cols = 4                                 # fix 4 columns per “block”
+    blocks = math.ceil(B / cols)             # how many groups of 4 we need
+    
+    # Number of sub‐rows per block: 2 if no preds, else 3
+    sub_rows = 3 if has_preds else 2
+    
+    # Total rows = blocks * sub_rows
+    total_rows = blocks * sub_rows
+    
+    # Set up figure size: each plot approx. 4×4 inches
+    plt.figure(figsize=(cols * 4, total_rows * 3))
+
+    for idx in range(B):
+        block_idx = idx // cols                     # which group of 4 we're in
+        col_idx   = idx % cols                      # position within that group (0..3)
+
+        # Row offset for this block:
+        #   for block_idx=0, row_offset=0
+        #   for block_idx=1, row_offset = sub_rows
+        #   for block_idx=2, row_offset = 2*sub_rows, etc.
+        row_offset = block_idx * sub_rows
+
+        # 1) Plot image at (row_offset, col_idx)
+        ax_image = plt.subplot(total_rows, cols, (row_offset * cols) + col_idx + 1)
+        ax_image.imshow(images_np[idx] / 255.0 if images_np[idx].max() > 1.0 else images_np[idx])
+        ax_image.set_title(f"Image {idx+1}")
+        ax_image.axis("off")
+
+        # 2) Plot ground‐truth mask at (row_offset + 1, col_idx)
+        ax_mask = plt.subplot(total_rows, cols, ((row_offset + 1) * cols) + col_idx + 1)
+        mask_i = masks_np[idx]
+        if mask_i.ndim == 3 and mask_i.shape[-1] == 1:
+            mask_i = mask_i[..., 0]
+        ax_mask.imshow(mask_i, cmap="nipy_spectral")
+        ax_mask.set_title(f"Mask {idx+1}")
+        ax_mask.axis("off")
+
+        # 3) If pred_masks given, plot at (row_offset + 2, col_idx)
+        if has_preds:
+            ax_pred = plt.subplot(total_rows, cols, ((row_offset + 2) * cols) + col_idx + 1)
+            pm = pred_np[idx]
+            if pm.ndim == 3 and pm.shape[-1] == 1:
+                pm = pm[..., 0]
+            ax_pred.imshow(pm, cmap="nipy_spectral")
+            ax_pred.set_title(f"Pred {idx+1}")
+            ax_pred.axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
+##--------------------------------------------------------------------------------------------------------------------
+
 import pandas as pd
 import numpy as np
 import tensorflow as tf
