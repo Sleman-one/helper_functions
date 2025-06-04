@@ -219,7 +219,7 @@ def preprocess_rgb_mask(mask_path: str) -> tf.Tensor:
     r = tf.cast(rgb_mask[:, :, 0], tf.int32)
     g = tf.cast(rgb_mask[:, :, 1], tf.int32)
     b = tf.cast(rgb_mask[:, :, 2], tf.int32)
-    pixel_keys = (r << 16) | (g << 8) | b  # shape = (H, W), dtype=int32
+    pixel_keys = tf.bitwise.left_shift(r_channel, 16) | tf.bitwise.left_shift(g_channel, 8) | b_channel # shape = (H, W), dtype=int32
 
     # 5) Lookup each key in the table → single‐channel class ID map
     id_mask = table.lookup(pixel_keys)     # shape = (H, W), dtype=int32
@@ -317,7 +317,7 @@ def preprocess_rgb_mask_with_csv(
     r_channel = tf.cast(rgb_mask[..., 0], tf.int32)
     g_channel = tf.cast(rgb_mask[..., 1], tf.int32)
     b_channel = tf.cast(rgb_mask[..., 2], tf.int32)
-    pixel_keys = (r_channel << 16) | (g_channel << 8) | b_channel  # shape = (H, W)
+    pixel_keys = tf.bitwise.left_shift(r_channel, 16) | tf.bitwise.left_shift(g_channel, 8) | b_channel  # shape = (H, W)
 
     # 9) Look up each pixel_key in the table → single‐channel ID mask
     id_mask = lookup_table.lookup(pixel_keys)  # shape = (H, W), dtype=int32
